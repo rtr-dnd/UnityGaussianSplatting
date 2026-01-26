@@ -32,6 +32,9 @@ StructuredBuffer<SplatViewData> _SplatViewData;
 ByteAddressBuffer _SplatSelectedBits;
 uint _SplatBitsValid;
 
+half4 _SplatColorTint;
+sampler2D _SplatToneCurve;
+
 v2f vert (uint vtxID : SV_VertexID, uint instID : SV_InstanceID)
 {
     v2f o = (v2f)0;
@@ -103,7 +106,13 @@ half4 frag (v2f i) : SV_Target
     if (alpha < 1.0/255.0)
         discard;
 
-    half4 res = half4(i.col.rgb * alpha, alpha);
+    float3 color = i.col.rgb;
+    color.r = tex2D(_SplatToneCurve, float2(saturate(color.r), 0)).r;
+    color.g = tex2D(_SplatToneCurve, float2(saturate(color.g), 0)).r;
+    color.b = tex2D(_SplatToneCurve, float2(saturate(color.b), 0)).r;
+    color *= _SplatColorTint.rgb;
+
+    half4 res = half4(color * alpha, alpha);
     return res;
 }
 ENDCG

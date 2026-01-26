@@ -238,6 +238,12 @@ namespace GaussianSplatting.Runtime
         [Range(1,30)] [Tooltip("Sort splats only every N frames")]
         public int m_SortNthFrame = 1;
 
+        [Tooltip("Color tint and brightness adjustment")]
+        public Color m_ColorTint = Color.white;
+        [Tooltip("Tone curve for the splat colors")]
+        public AnimationCurve m_ToneCurve = AnimationCurve.Linear(0, 0, 1, 1);
+        Texture2D m_ToneCurveTex;
+
         public RenderMode m_RenderMode = RenderMode.Splats;
         [Range(1.0f,15.0f)] public float m_PointDisplaySize = 3.0f;
 
@@ -328,6 +334,8 @@ namespace GaussianSplatting.Runtime
             public static readonly int SelectionMode = Shader.PropertyToID("_SelectionMode");
             public static readonly int SplatPosMouseDown = Shader.PropertyToID("_SplatPosMouseDown");
             public static readonly int SplatOtherMouseDown = Shader.PropertyToID("_SplatOtherMouseDown");
+            public static readonly int SplatColorTint = Shader.PropertyToID("_SplatColorTint");
+            public static readonly int SplatToneCurve = Shader.PropertyToID("_SplatToneCurve");
         }
 
         [field: NonSerialized] public bool editModified { get; private set; }
@@ -522,6 +530,31 @@ namespace GaussianSplatting.Runtime
             mat.SetInteger(Props.SplatFormat, (int)format);
             mat.SetInteger(Props.SplatCount, m_SplatCount);
             mat.SetInteger(Props.SplatChunkCount, m_GpuChunksValid ? m_GpuChunks.count : 0);
+
+            UpdateToneCurveTex();
+            mat.SetColor(Props.SplatColorTint, m_ColorTint);
+            mat.SetTexture(Props.SplatToneCurve, m_ToneCurveTex);
+        }
+
+        void UpdateToneCurveTex()
+        {
+            if (m_ToneCurveTex == null)
+            {
+                m_ToneCurveTex = new Texture2D(256, 1, TextureFormat.RFloat, false, true)
+                {
+                    name = "GaussianToneCurve",
+                    filterMode = FilterMode.Bilinear,
+                    wrapMode = TextureWrapMode.Clamp
+                };
+            }
+
+            var data = new float[256];
+            for (int i = 0; i < 256; ++i)
+            {
+                data[i] = m_ToneCurve.Evaluate(i / 255.0f);
+            }
+            m_ToneCurveTex.SetPixelData(data, 0);
+            m_ToneCurveTex.Apply();
         }
 
         static void DisposeBuffer(ref GraphicsBuffer buf)
@@ -533,6 +566,8 @@ namespace GaussianSplatting.Runtime
         void DisposeResourcesForAsset()
         {
             DestroyImmediate(m_GpuColorData);
+            DestroyImmediate(m_ToneCurveTex);
+            m_ToneCurveTex = null;
 
             DisposeBuffer(ref m_GpuPosData);
             DisposeBuffer(ref m_GpuOtherData);
