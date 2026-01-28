@@ -55,7 +55,7 @@ namespace GaussianSplatting.Runtime
                 passData.GaussianSplatRT = textureHandle;
 
                 builder.UseTexture(resourceData.activeColorTexture, AccessFlags.ReadWrite);
-                builder.UseTexture(resourceData.activeDepthTexture);
+                builder.UseTexture(resourceData.activeDepthTexture, AccessFlags.Read);
                 builder.UseTexture(textureHandle, AccessFlags.Write);
                 builder.AllowPassCulling(false);
                 builder.SetRenderFunc(static (PassData data, UnsafeGraphContext context) =>
@@ -63,7 +63,11 @@ namespace GaussianSplatting.Runtime
                     var commandBuffer = CommandBufferHelpers.GetNativeCommandBuffer(context.cmd);
                     using var _ = new ProfilingScope(commandBuffer, s_profilingSampler);
                     commandBuffer.SetGlobalTexture(s_gaussianSplatRT, data.GaussianSplatRT);
-                    CoreUtils.SetRenderTarget(commandBuffer, data.GaussianSplatRT, data.SourceDepth, ClearFlag.Color, Color.clear);
+                    
+                    // Use SourceDepth which should contain the stencil from opaque objects
+                    CoreUtils.SetRenderTarget(commandBuffer, data.GaussianSplatRT, data.SourceDepth);
+                    commandBuffer.ClearRenderTarget(RTClearFlags.Color, Color.clear, 1, 0);
+
                     Material matComposite = GaussianSplatRenderSystem.instance.SortAndRenderSplats(data.CameraData.camera, commandBuffer);
                     commandBuffer.BeginSample(GaussianSplatRenderSystem.s_ProfCompose);
                     Blitter.BlitCameraTexture(commandBuffer, data.GaussianSplatRT, data.SourceTexture, matComposite, 0);

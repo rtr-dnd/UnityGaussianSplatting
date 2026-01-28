@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: MIT
 Shader "Gaussian Splatting/Render Splats"
 {
+    Properties
+    {
+        _StencilRef ("Stencil Ref", Int) = 0
+        [Enum(UnityEngine.Rendering.CompareFunction)] _StencilComp ("Stencil Comp", Int) = 8
+    }
     SubShader
     {
         Tags { "RenderType"="Transparent" "Queue"="Transparent" }
@@ -11,6 +16,12 @@ Shader "Gaussian Splatting/Render Splats"
             Blend OneMinusDstAlpha One
             Cull Off
             
+            Stencil
+            {
+                Ref [_StencilRef]
+                Comp [_StencilComp]
+            }
+            
 CGPROGRAM
 #pragma vertex vert
 #pragma fragment frag
@@ -18,6 +29,9 @@ CGPROGRAM
 #pragma use_dxc
 
 #include "GaussianSplatting.hlsl"
+
+int _StencilRef;
+int _StencilComp;
 
 StructuredBuffer<uint> _OrderBuffer;
 

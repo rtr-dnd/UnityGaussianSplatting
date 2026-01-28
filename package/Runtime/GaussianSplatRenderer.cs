@@ -244,6 +244,10 @@ namespace GaussianSplatting.Runtime
         public AnimationCurve m_ToneCurve = AnimationCurve.Linear(0, 0, 1, 1);
         Texture2D m_ToneCurveTex;
 
+        [Header("Stencil Masking")]
+        public int m_StencilRef = 0;
+        public CompareFunction m_StencilComp = CompareFunction.Always;
+
         public RenderMode m_RenderMode = RenderMode.Splats;
         [Range(1.0f,15.0f)] public float m_PointDisplaySize = 3.0f;
 
@@ -336,6 +340,8 @@ namespace GaussianSplatting.Runtime
             public static readonly int SplatOtherMouseDown = Shader.PropertyToID("_SplatOtherMouseDown");
             public static readonly int SplatColorTint = Shader.PropertyToID("_SplatColorTint");
             public static readonly int SplatToneCurve = Shader.PropertyToID("_SplatToneCurve");
+            public static readonly int StencilRef = Shader.PropertyToID("_StencilRef");
+            public static readonly int StencilComp = Shader.PropertyToID("_StencilComp");
         }
 
         [field: NonSerialized] public bool editModified { get; private set; }
@@ -534,6 +540,10 @@ namespace GaussianSplatting.Runtime
             UpdateToneCurveTex();
             mat.SetColor(Props.SplatColorTint, m_ColorTint);
             mat.SetTexture(Props.SplatToneCurve, m_ToneCurveTex);
+
+            // Stencil must be set on the material itself, not property block
+            m_MatSplats.SetInt(Props.StencilRef, m_StencilRef);
+            m_MatSplats.SetInt(Props.StencilComp, (int)m_StencilComp);
         }
 
         void UpdateToneCurveTex()
