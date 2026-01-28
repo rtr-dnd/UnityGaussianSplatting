@@ -16,18 +16,24 @@ namespace GaussianSplatting.Runtime
     class GaussianSplatURPFeature : ScriptableRendererFeature
     {
         public LayerMask m_MaskLayer = 0;
+        public float m_MaskBlurRadius = 0;
+        public Shader m_ShaderBlur;
 
         class GSRenderPass : ScriptableRenderPass
         {
             const string GaussianSplatRTName = "_GaussianSplatRT";
             const string GaussianAlphaMaskRTName = "_GaussianAlphaMaskRT";
+            const string GaussianAlphaMaskBlurRTName = "_GaussianAlphaMaskBlurRT";
 
             const string ProfilerTag = "GaussianSplatRenderGraph";
             static readonly ProfilingSampler s_profilingSampler = new(ProfilerTag);
             static readonly int s_gaussianSplatRT = Shader.PropertyToID(GaussianSplatRTName);
             static readonly int s_gaussianAlphaMaskRT = Shader.PropertyToID(GaussianAlphaMaskRTName);
+            static readonly int s_blurRadius = Shader.PropertyToID("_BlurRadius");
 
             public LayerMask m_MaskLayer;
+            public float m_MaskBlurRadius;
+            public Material m_MatBlur;
 
             class PassData
             {
@@ -36,7 +42,10 @@ namespace GaussianSplatting.Runtime
                 internal TextureHandle SourceDepth;
                 internal TextureHandle GaussianSplatRT;
                 internal TextureHandle GaussianAlphaMaskRT;
+                internal TextureHandle GaussianAlphaMaskBlurRT;
                 internal RendererListHandle MaskRendererList;
+                internal float MaskBlurRadius;
+                internal Material MatBlur;
             }
 
             public override void RecordRenderGraph(RenderGraph renderGraph, ContextContainer frameData)
@@ -67,7 +76,6 @@ namespace GaussianSplatting.Runtime
 
                 if (m_MaskLayer != 0)
                 {
-                    // Use custom LightMode tag to avoid rendering into main scene
                     var maskRendererDesc = new UnityEngine.Rendering.RendererUtils.RendererListDesc(new ShaderTagId("GaussianAlphaMask"), renderingData.cullResults, cameraData.camera)
                     {
                         layerMask = m_MaskLayer,
@@ -86,8 +94,32 @@ namespace GaussianSplatting.Runtime
                         {
                             var cmd = CommandBufferHelpers.GetNativeCommandBuffer(context.cmd);
                             CoreUtils.SetRenderTarget(cmd, data.GaussianAlphaMaskRT);
-                            cmd.DrawRendererList(data.MaskRendererList); // ここで実際に描画！
+                            cmd.DrawRendererList(data.MaskRendererList);
                         });
+                    }
+                }
+
+                // --- Blur Pass ---
+                TextureHandle finalMaskHandle = maskTextureHandle;
+                if (m_MaskBlurRadius > 0 && m_MatBlur != null)
+                {
+                    var blurTextureHandle = UniversalRenderer.CreateRenderGraphTexture(renderGraph, maskDesc, GaussianAlphaMaskBlurRTName, true);
+                    using (var blurBuilder = renderGraph.AddUnsafePass("GaussianAlphaMaskBlurPass", out PassData blurPassData))
+                    {
+                        blurPassData.GaussianAlphaMaskRT = maskTextureHandle;
+                        blurPassData.GaussianAlphaMaskBlurRT = blurTextureHandle;
+                        blurPassData.MaskBlurRadius = m_MaskBlurRadius;
+                        blurPassData.MatBlur = m_MatBlur;
+
+                        blurBuilder.UseTexture(maskTextureHandle, AccessFlags.Read);
+                        blurBuilder.UseTexture(blurTextureHandle, AccessFlags.Write);
+                        blurBuilder.SetRenderFunc(static (PassData data, UnsafeGraphContext context) =>
+                        {
+                            var cmd = CommandBufferHelpers.GetNativeCommandBuffer(context.cmd);
+                            data.MatBlur.SetFloat(s_blurRadius, data.MaskBlurRadius);
+                            Blitter.BlitCameraTexture(cmd, data.GaussianAlphaMaskRT, data.GaussianAlphaMaskBlurRT, data.MatBlur, 0);
+                        });
+                        finalMaskHandle = blurTextureHandle;
                     }
                 }
 
@@ -104,12 +136,12 @@ namespace GaussianSplatting.Runtime
                     passData.SourceTexture = resourceData.activeColorTexture;
                     passData.SourceDepth = resourceData.activeDepthTexture;
                     passData.GaussianSplatRT = textureHandle;
-                    passData.GaussianAlphaMaskRT = maskTextureHandle;
+                    passData.GaussianAlphaMaskRT = finalMaskHandle;
 
                     builder.UseTexture(resourceData.activeColorTexture, AccessFlags.ReadWrite);
                     builder.UseTexture(resourceData.activeDepthTexture, AccessFlags.Read);
                     builder.UseTexture(textureHandle, AccessFlags.Write);
-                    builder.UseTexture(maskTextureHandle, AccessFlags.Read);
+                    builder.UseTexture(finalMaskHandle, AccessFlags.Read);
                     builder.AllowPassCulling(false);
 
                     builder.SetRenderFunc(static (PassData data, UnsafeGraphContext context) =>
@@ -135,14 +167,20 @@ namespace GaussianSplatting.Runtime
         }
 
         GSRenderPass m_Pass;
+        Material m_MatBlur;
         bool m_HasCamera;
 
         public override void Create()
         {
+            if (m_ShaderBlur != null)
+                m_MatBlur = CoreUtils.CreateEngineMaterial(m_ShaderBlur);
+
             m_Pass = new GSRenderPass
             {
                 renderPassEvent = RenderPassEvent.BeforeRenderingTransparents,
-                m_MaskLayer = m_MaskLayer
+                m_MaskLayer = m_MaskLayer,
+                m_MaskBlurRadius = m_MaskBlurRadius,
+                m_MatBlur = m_MatBlur
             };
         }
 
@@ -160,12 +198,18 @@ namespace GaussianSplatting.Runtime
         {
             if (!m_HasCamera)
                 return;
+            
+            m_Pass.m_MaskLayer = m_MaskLayer;
+            m_Pass.m_MaskBlurRadius = m_MaskBlurRadius;
+            m_Pass.m_MatBlur = m_MatBlur;
+            
             renderer.EnqueuePass(m_Pass);
         }
 
         protected override void Dispose(bool disposing)
         {
             m_Pass = null;
+            CoreUtils.Destroy(m_MatBlur);
         }
     }
 }
