@@ -48,6 +48,7 @@ uint _SplatBitsValid;
 
 half4 _SplatColorTint;
 sampler2D _SplatToneCurve;
+sampler2D _GaussianAlphaMaskRT;
 
 v2f vert (uint vtxID : SV_VertexID, uint instID : SV_InstanceID)
 {
@@ -127,6 +128,12 @@ half4 frag (v2f i) : SV_Target
     color *= _SplatColorTint.rgb;
 
     half4 res = half4(color * alpha, alpha);
+
+    // Apply alpha mask from screen space texture at the very end
+    float2 screenUV = i.vertex.xy / _ScreenParams.xy;
+    half mask = tex2D(_GaussianAlphaMaskRT, screenUV).r;
+    res *= mask;
+
     return res;
 }
 ENDCG
