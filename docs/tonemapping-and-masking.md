@@ -13,20 +13,23 @@ You can adjust the color and brightness of the splats from the Inspector of the 
 
 ## 2. Alpha Masking (Recommended)
 
-Use 3D object shapes to "softly" fade out splats or reveal them only in specific areas. Since this is calculated per-pixel in screen space, the result is extremely smooth.
+Use 3D object shapes to "softly" fade out splats or reveal them only in specific areas. This system uses a screen-space buffer, allowing for smooth, per-pixel transparency and post-process blurring.
 
 ### Setup Instructions
 1.  **Prepare a Layer**: Go to `Edit > Project Settings > Tags and Layers` and create a new layer (e.g., `GaussianMask`).
-2.  **Configure Renderer Feature**: In your URP Renderer Asset, find the `GaussianSplatURPFeature` and assign your newly created layer to the `Mask Layer` property.
+2.  **Configure Renderer Feature**: 
+    *   In your URP Renderer Asset, find the `GaussianSplatURPFeature`.
+    *   Assign your layer to the **`Mask Layer`** property.
+    *   Assign the **`GaussianAlphaMaskBlur`** shader to the **`Shader Blur`** slot.
 3.  **Place Mask Objects**:
     *   Place objects like `Plane`, `Cube`, or `Sprite` in your scene.
     *   Set the **Layer** of these objects to `GaussianMask`.
-    *   Create a new material, set its shader to **`Gaussian Splatting/Alpha Mask`**, and assign it to the objects.
+    *   Apply a material using the **`Gaussian Splatting/Alpha Mask`** shader.
 
-### Behavior
-*   By default, **splats are hidden where there is no mask object**.
-*   Splats are revealed where a mask object is present, based on that object's transparency (Alpha value).
-*   **Using Textures**: By assigning a gradient texture to the mask material, you can clip splats with complex shapes or soft, smoky boundaries.
+### Key Features
+*   **Visibility Logic**: By default, **splats are hidden**. They only appear where a mask object is present.
+*   **Mask Blur Radius**: You can control the softness of the mask boundaries globally via the `Mask Blur Radius` slider in the `GaussianSplatURPFeature`. This blur remains consistent even if you stretch or scale your mask objects (e.g., non-uniform scaling of Sprites).
+*   **Transparency Control**: The opacity of the splats within the mask is determined by the **Alpha value** of the mask material's Tint Color or its texture.
 
 ## 3. Stencil Masking
 
