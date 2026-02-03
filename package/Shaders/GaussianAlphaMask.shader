@@ -5,6 +5,7 @@ Shader "Gaussian Splatting/Alpha Mask"
     {
         _MainTex ("Mask Texture (A)", 2D) = "white" {}
         _Color ("Tint (Alpha is mask strength)", Color) = (1,1,1,1)
+        _Expand ("Expand Amount", Range(0, 1)) = 0
     }
     SubShader
     {
@@ -17,7 +18,7 @@ Shader "Gaussian Splatting/Alpha Mask"
             
             ColorMask R
             ZWrite Off
-            Blend One Zero // 上書きモードに変更
+            Blend One Zero // 上書きモード
 
             HLSLPROGRAM
             #pragma vertex vert
@@ -27,6 +28,7 @@ Shader "Gaussian Splatting/Alpha Mask"
             struct Attributes
             {
                 float4 positionOS : POSITION;
+                float3 normalOS : NORMAL;
                 float2 uv : TEXCOORD0;
                 float4 color : COLOR;
             };
@@ -41,11 +43,23 @@ Shader "Gaussian Splatting/Alpha Mask"
             TEXTURE2D(_MainTex);
             SAMPLER(sampler_MainTex);
             float4 _Color;
+            float _Expand;
 
             Varyings vert (Attributes input)
             {
                 Varyings output;
-                output.positionCS = TransformObjectToHClip(input.positionOS.xyz);
+                
+                // 頂点を中心からの方向（または法線）に押し出して領域を広げる
+                float3 posOS = input.positionOS.xyz;
+                
+                // 単純な形状（中心が0,0,0）であれば座標そのものの正規化がスムース法線の代わりになる
+                float3 expandDir = normalize(posOS);
+                // 法線がある程度スムースな場合は法線と混ぜるとより正確
+                // float3 expandDir = normalize(input.normalOS + normalize(posOS));
+                
+                posOS += expandDir * _Expand;
+                
+                output.positionCS = TransformObjectToHClip(posOS);
                 output.uv = input.uv;
                 output.color = input.color;
                 return output;
