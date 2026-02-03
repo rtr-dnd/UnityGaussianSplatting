@@ -6,6 +6,7 @@ Shader "Gaussian Splatting/Alpha Mask"
         _MainTex ("Mask Texture (A)", 2D) = "white" {}
         _Color ("Tint (Alpha is mask strength)", Color) = (1,1,1,1)
         _Expand ("Expand Amount", Range(0, 1)) = 0
+        [KeywordEnum(Normal, Center)] _ExpandMode ("Expand Mode", Float) = 1
     }
     SubShader
     {
@@ -24,6 +25,7 @@ Shader "Gaussian Splatting/Alpha Mask"
             HLSLPROGRAM
             #pragma vertex vert
             #pragma fragment frag
+            #pragma multi_compile_local _EXPANDMODE_NORMAL _EXPANDMODE_CENTER
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
 
             struct Attributes
@@ -52,13 +54,17 @@ Shader "Gaussian Splatting/Alpha Mask"
                 
                 float3 posOS = input.positionOS.xyz;
                 
-                // 頂点が中心(0,0,0)にある場合は広げない、それ以外は中心からの向きに広げる
-                float dist = length(posOS);
-                if (dist > 0.0001)
-                {
-                    float3 expandDir = posOS / dist;
-                    posOS += expandDir * _Expand;
-                }
+                #if defined(_EXPANDMODE_CENTER)
+                    // 中心からの向きに広げる（キューブやディスク向け）
+                    float dist = length(posOS);
+                    if (dist > 0.0001)
+                    {
+                        posOS += (posOS / dist) * _Expand;
+                    }
+                #else
+                    // 法線方向に押し出す（スムース法線メッシュ向け）
+                    posOS += input.normalOS * _Expand;
+                #endif
                 
                 output.positionCS = TransformObjectToHClip(posOS);
                 output.uv = input.uv;
