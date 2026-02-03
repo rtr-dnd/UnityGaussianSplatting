@@ -18,6 +18,7 @@ Shader "Gaussian Splatting/Alpha Mask"
             
             ColorMask R
             ZWrite Off
+            Cull Off // 両面描画を有効にする（動的メッシュ対策）
             Blend One Zero // 上書きモード
 
             HLSLPROGRAM
@@ -49,15 +50,15 @@ Shader "Gaussian Splatting/Alpha Mask"
             {
                 Varyings output;
                 
-                // 頂点を中心からの方向（または法線）に押し出して領域を広げる
                 float3 posOS = input.positionOS.xyz;
                 
-                // 単純な形状（中心が0,0,0）であれば座標そのものの正規化がスムース法線の代わりになる
-                float3 expandDir = normalize(posOS);
-                // 法線がある程度スムースな場合は法線と混ぜるとより正確
-                // float3 expandDir = normalize(input.normalOS + normalize(posOS));
-                
-                posOS += expandDir * _Expand;
+                // 頂点が中心(0,0,0)にある場合は広げない、それ以外は中心からの向きに広げる
+                float dist = length(posOS);
+                if (dist > 0.0001)
+                {
+                    float3 expandDir = posOS / dist;
+                    posOS += expandDir * _Expand;
+                }
                 
                 output.positionCS = TransformObjectToHClip(posOS);
                 output.uv = input.uv;
